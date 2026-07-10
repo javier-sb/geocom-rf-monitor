@@ -5,6 +5,7 @@ from datetime import datetime
 import requests
 import os
 from dotenv import load_dotenv
+import threading
 
 load_dotenv()
 
@@ -20,7 +21,7 @@ if CHAT_ID is None:
 CENTER_FREQ = 454.975e6
 SAMPLE_RATE = 250e3
 SAMPLES = 64 * 1024
-THRESHOLD = -33         # practical value (with antenna, then without antenna while base is transmitting) --> (-45.1 + -21.8) / 2 = -33.45 dB
+THRESHOLD = -36         # practical value (with antenna, then without antenna while base is transmitting) --> (-45.1 + -21.8) / 2 = -33.45 dB
 
 sdr = RtlSdr()
 
@@ -29,7 +30,7 @@ sdr.sample_rate = SAMPLE_RATE
 sdr.gain = 30
 
 # Frequency presence check (Logic)
-OFFLINE_TIMEOUT = 5 # seconds
+OFFLINE_TIMEOUT = 10 # seconds
 last_seen = 0
 status = None
 first_run = True
@@ -63,6 +64,72 @@ def send_telegram(message):
         print(f"Telegram error: {e}")
         if e.response is not None:
             print(e.response.text)
+
+def telegram_listener():
+
+    offset = None
+
+    while True:
+        url = (
+            f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+        )
+
+        try:
+            params = {
+                "timeout": 10
+            }
+
+            if offset:
+                params["offset"] = offset
+
+            response = requests.get(
+                url,
+                params=params,
+                timeout=15
+            )
+
+            response.raise_for_status()
+
+            updates = response.json()["result"]
+
+            for update in updates:
+                offset = update["update_id"] + 1
+
+                if "message" not in update:
+                    continue
+
+                message = update["message"]
+
+                chat_id = message["chat"]["id"]
+                text = message.get("text", "")
+
+                if str(chat_id) != str(CHAT_ID):
+                    continue
+
+                if text == "/alive":
+                
+                    duration = time.time() - state_since
+                    
+                    icon = "🟢" if status == "ONLINE" else "🔴"
+                    
+                    if status == "ONLINE":
+                        extra = f"🔄 Tiempo ONLINE: {format_duration(duration)}\n"
+                    else:
+                        extra = f"🔄 Tiempo OFFLINE: {format_duration(duration)}\n"
+                        
+                    send_telegram(
+                        "✅ GEOCOM RF Monitor activo\n\n"
+                        f"{icon} Estado: {status}\n"
+                        f"{extra}"
+                        f"📡 Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
+                        f"📶 Potencia relativa: {power:.1f} dB\n"
+                        f"🕒 Tiempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    )
+
+        except requests.RequestException as e:
+            print(f"Telegram listener error: {e}")
+
+        time.sleep(1)
 
 # //// RF ////
 
@@ -124,6 +191,13 @@ def send_status_notification(status, power, timestamp, duration):
     send_telegram(message)
 
 # /// LOGIC ///
+
+telegram_thread = threading.Thread(
+    target=telegram_listener,
+    daemon=True
+)
+
+telegram_thread.start()
 
 try:
     while True:
