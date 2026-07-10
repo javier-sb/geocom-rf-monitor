@@ -21,7 +21,7 @@ if CHAT_ID is None:
 CENTER_FREQ = 454.975e6
 SAMPLE_RATE = 250e3
 SAMPLES = 64 * 1024
-THRESHOLD = -36         # practical value (with antenna, then without antenna while base is transmitting) --> (-45.1 + -21.8) / 2 = -33.45 dB
+THRESHOLD = -37         # practical value (adjust as needed)
 
 sdr = RtlSdr()
 
@@ -30,7 +30,7 @@ sdr.sample_rate = SAMPLE_RATE
 sdr.gain = 30
 
 # Frequency presence check (Logic)
-OFFLINE_TIMEOUT = 10 # seconds
+OFFLINE_TIMEOUT = 60 # seconds
 last_seen = 0
 status = None
 first_run = True
@@ -106,7 +106,7 @@ def telegram_listener():
                 if str(chat_id) != str(CHAT_ID):
                     continue
 
-                if text == "/alive":
+                if text == "/alive@geocomrf_bot":
                 
                     duration = time.time() - state_since
                     
@@ -266,7 +266,7 @@ try:
             
             last_morning_report = now.date()
         
-        time.sleep(1)
+        time.sleep(0.2)
 
 
 except KeyboardInterrupt:
