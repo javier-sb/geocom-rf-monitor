@@ -34,6 +34,9 @@ last_seen = 0
 status = None
 first_run = True
 previous_status = None
+last_morning_report = None
+last_evening_report = None
+state_since = time.time()
 
 # //// TELEGRAM ////
 
@@ -49,13 +52,17 @@ def send_telegram(message):
     }
 
     try:
-        requests.post(
+        response = requests.post(
             url,
-            data=data,
-            timeout=10
+        data=data,
+        timeout=10
         )
+        
+        response.raise_for_status()
     except requests.RequestException as e:
         print(f"Telegram error: {e}")
+        if e.response is not None:
+            print(e.response.text)
 
 # //// RF ////
 
@@ -69,6 +76,7 @@ def measure_signal():
 
     return power_db
 
+# //// LOGS ////
 
 def log_event(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -76,16 +84,51 @@ def log_event(message):
     log_message = f"[{timestamp}] {message}"
 
     print(log_message)
-    send_telegram(log_message)
 
     with open("geocom_base.log", "a") as log:
         log.write(log_message + "\n")
+
+
+def format_duration(seconds):
+    seconds = int(seconds)
+
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if hours:
+        return f"{hours}h {minutes}m {seconds}s"
+    elif minutes:
+        return f"{minutes}m {seconds}s"
+    else:
+        return f"{seconds}s"
+
+
+def send_status_notification(status, power, timestamp, duration):
+
+    icon = "🟢" if status == "ONLINE" else "🔴"
+
+    message = (
+        f"{icon} GEOCOM RF Monitor\n\n"
+        f"Estado: {status}\n"
+        f"📡 Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
+        f"📶 Potencia relativa: {power:.1f} dB\n"
+    )
+
+    if status == "ONLINE":
+        message += f"🔄 Tiempo OFFLINE: {format_duration(duration)}\n"
+    else:
+        message += f"🔄 Tiempo ONLINE: {format_duration(duration)}\n"
+
+    message += f"🕒 Tiempo: {timestamp}"
+
+    send_telegram(message)
 
 # /// LOGIC ///
 
 try:
     while True:
-
+        now = datetime.now()
+        timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
         power = measure_signal()
         
         if power > THRESHOLD:
@@ -98,33 +141,57 @@ try:
         
         if first_run:
             previous_status = status
+            state_since = time.time()
             first_run = False
             
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             log_event(
                 f"Monitor RF inicializado\n"
                 f"Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
                 f"Estado actual: {status}\n"
                 f"Umbral: {THRESHOLD} dB\n"
                 f"Potencia relativa: {power:.1f} dB"
-            ) 
+            )
+            send_telegram(
+                f"🚀 GEOCOM RF Monitor Inicializado\n\n"
+                f"📡 Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
+                f"Estado actual: {status}\n"
+                f"📶 Potencia relativa: {power:.1f} dB\n"
+                f"🕒 Tiempo: {timestamp}"
+            )
         elif status != previous_status:
             
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            duration = time.time() - state_since
             
-            if status == "ONLINE":
-                log_event(
-                    f"GEOCOM BASE DETECTADA (454.975 MHz)\n"
-                    f"Potencia relativa: {power:.1f} dB"
-                )
-            else:
-                log_event(
-                    f"GEOCOM BASE NO DETECTADA (454.975 MHz)\n"
-                    f"Potencia relativa: {power:.1f} dB"
-                )
-                
-            previous_status = status
+            log_event(
+                f"GEOCOM BASE {status}\n"
+                f"Tiempo en estado anterior: {format_duration(duration)}\n"
+                f"Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
+                f"Potencia relativa: {power:.1f} dB"
+            )
 
+            send_status_notification(
+                status,
+                power,
+                timestamp,
+                duration
+            )
+            
+            state_since = time.time()
+            previous_status = status
+            
+        if (now.hour == 8 and now.minute == 0 and last_morning_report != now.date()):
+            send_telegram(
+                f"🌅 GEOCOM RF Monitor\n"
+                f"Reporte diario - 8:00 AM\n\n"
+                f"Fecha: {now.strftime('%Y-%m-%d %H:%M')}\n"
+                f"Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
+                f"Estado: {'🟢 ONLINE' if status == 'ONLINE' else '🔴 OFFLINE'}\n"
+                f"Potencia: {power:.1f} dB\n"
+                f"Umbral: {THRESHOLD:.1f} dB"
+            )
+            
+            last_morning_report = now.date()
+        
         time.sleep(1)
 
 
