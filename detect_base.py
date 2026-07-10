@@ -120,10 +120,10 @@ def telegram_listener():
                     send_telegram(
                         "✅ GEOCOM RF Monitor activo\n\n"
                         f"{icon} Estado: {status}\n"
-                        f"{extra}"
+                        f"{extra}\n"
                         f"📡 Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
                         f"📶 Potencia relativa: {power:.1f} dB\n"
-                        f"🕒 Tiempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"🕒 Tiempo: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
 
         except requests.RequestException as e:
@@ -228,6 +228,7 @@ try:
             send_telegram(
                 f"🚀 GEOCOM RF Monitor Inicializado\n\n"
                 f"📡 Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
+                f"Umbral: {THRESHOLD:.1f} dB\n"
                 f"Estado actual: {status}\n"
                 f"📶 Potencia relativa: {power:.1f} dB\n"
                 f"🕒 Tiempo: {timestamp}"
@@ -254,12 +255,15 @@ try:
             previous_status = status
             
         if (now.hour == 8 and now.minute == 0 and last_morning_report != now.date()):
+            
+            duration = time.time() - state_since
+            
             send_telegram(
                 f"🌅 GEOCOM RF Monitor\n"
                 f"Reporte diario - 8:00 AM\n\n"
                 f"Fecha: {now.strftime('%Y-%m-%d %H:%M')}\n"
                 f"Frecuencia: {CENTER_FREQ/1e6:.3f} MHz\n"
-                f"Estado: {'🟢 ONLINE' if status == 'ONLINE' else '🔴 OFFLINE'}\n"
+                f"Estado: {'🟢 ONLINE' if status == 'ONLINE' else '🔴 OFFLINE'} por {format_duration(duration)}\n"
                 f"Potencia: {power:.1f} dB\n"
                 f"Umbral: {THRESHOLD:.1f} dB"
             )
