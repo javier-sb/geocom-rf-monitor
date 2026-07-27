@@ -6,8 +6,11 @@ import requests
 import os
 from dotenv import load_dotenv
 import threading
+import matplotlib.pyplot as plt
+from collections import deque
 
 load_dotenv()
+os.makedirs("captures", exist_ok=True)
 
 # TELEGRAM BOT
 BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -28,6 +31,7 @@ sdr = RtlSdr()
 sdr.center_freq = CENTER_FREQ
 sdr.sample_rate = SAMPLE_RATE
 sdr.gain = 30
+IQ_BUFFER = deque(maxlen=300) # 300 * 0.2 = 60 seconds
 
 # Frequency presence check (Logic)
 OFFLINE_TIMEOUT = 60 # seconds
@@ -133,9 +137,7 @@ def telegram_listener():
 
 # //// RF ////
 
-def measure_signal():
-
-    samples = sdr.read_samples(SAMPLES)
+def measure_signal(samples):
 
     power = np.mean(np.abs(samples)**2)
 
@@ -189,6 +191,62 @@ def send_status_notification(status, power, timestamp, duration):
     message += f"🕒 Tiempo: {timestamp}"
 
     send_telegram(message)
+    
+
+def send_telegram_photo(photo_path, caption=""):
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+
+    try:
+        with open(photo_path, "rb") as photo:
+
+            response = requests.post(
+                url,
+                data={
+                    "chat_id": CHAT_ID,
+                    "caption": caption
+                },
+                files={
+                    "photo": photo
+                },
+                timeout=30
+            )
+
+        response.raise_for_status()
+
+    except requests.RequestException as e:
+        print(f"Telegram photo error: {e}")
+
+        if e.response is not None:
+            print(e.response.text)
+
+
+def save_waterfall(iq_buffer, timestamp):
+
+    capture = np.concatenate(iq_buffer)
+
+    plt.figure(figsize=(10,6))
+
+    plt.specgram(
+        capture,
+        sides="twosided",
+        NFFT=1024,
+        Fs=SAMPLE_RATE,
+        noverlap=512,
+        cmap="viridis"
+    )
+
+    plt.title(f"454.975 MHz\n{timestamp}")
+    plt.xlabel("Time")
+    plt.ylabel("Frequency")
+
+    filename = f"captures/{timestamp.replace(':','-').replace(' ','_')}.png"
+
+    plt.savefig(filename, dpi=150)
+    plt.close()
+
+    return filename
+    
 
 # /// LOGIC ///
 
@@ -203,7 +261,10 @@ try:
     while True:
         now = datetime.now()
         timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-        power = measure_signal()
+        
+        samples = sdr.read_samples(SAMPLES)
+        IQ_BUFFER.append(samples)
+        power = measure_signal(samples)
         
         if power > THRESHOLD:
             last_seen = time.time()
@@ -235,6 +296,10 @@ try:
             )
         elif status != previous_status:
             
+            if status == "OFFLINE":
+                image = save_waterfall(IQ_BUFFER, timestamp)
+                log_event(f"Waterfall saved: {image}")
+            
             duration = time.time() - state_since
             
             log_event(
@@ -250,6 +315,9 @@ try:
                 timestamp,
                 duration
             )
+            
+            if status == "OFFLINE":
+                send_telegram_photo(image)
             
             state_since = time.time()
             previous_status = status
