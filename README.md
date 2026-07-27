@@ -55,11 +55,12 @@ El sistema detecta automáticamente cambios en el estado de la transmisión (ONL
 | Sample Rate | 250 kS/s |
 | Muestras | 65536 |
 | Ganancia | 30 dB |
-| Umbral de detección | -37 dBFS |
+| Umbral de detección | -37 dBFS* |
 | Timeout OFFLINE | 60 s |
 | Intervalo de monitoreo | 0.2 s |
 
-La potencia corresponde a una medición relativa obtenida a partir de las muestras IQ capturadas por el RTL-SDR y no representa una medición calibrada en dBm.
+*La potencia corresponde a una medición relativa obtenida a partir de las muestras IQ capturadas por el RTL-SDR y no representa una medición calibrada en dBm.
+
 ---
 
 # Funcionamiento
