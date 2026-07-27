@@ -10,7 +10,7 @@ El sistema detecta automáticamente cambios en el estado de la transmisión (ONL
 
 # Hardware utilizado
 
-| Componente | Descripción |
+| Componente | Función |
 |------------|-------------|
 | Raspberry Pi 4 Model B | Equipo encargado de ejecutar el servicio de monitoreo y gestionar las notificaciones. |
 | RTL-SDR V4c | Receptor SDR utilizado para la adquisición de muestras IQ de la señal RF. |
@@ -55,10 +55,11 @@ El sistema detecta automáticamente cambios en el estado de la transmisión (ONL
 | Sample Rate | 250 kS/s |
 | Muestras | 65536 |
 | Ganancia | 30 dB |
-| Umbral de detección | -37 dB |
+| Umbral de detección | -37 dBFS |
 | Timeout OFFLINE | 60 s |
 | Intervalo de monitoreo | 0.2 s |
 
+La potencia corresponde a una medición relativa obtenida a partir de las muestras IQ capturadas por el RTL-SDR y no representa una medición calibrada en dBm.
 ---
 
 # Funcionamiento
@@ -82,7 +83,7 @@ Lectura de muestras IQ
 Cálculo de potencia promedio
         │
         ▼
-¿Potencia > Umbral?
+¿Potencia ≥ Umbral?
         │
  ┌──────┴──────┐
  │             │
@@ -110,7 +111,7 @@ ONLINE      OFFLINE
 
 - Inicio del monitor.
 - Cambio a ONLINE.
-- Cambio a OFFLINE.
+- Cambio a OFFLINE, acompañado de un espectrograma generado 30 segundos después de la detección.
 - Reporte diario (08:00 hrs).
 
 ## Comandos 
@@ -127,6 +128,12 @@ Devuelve:
 
 ---
 
-# Ejemplo de utilizacion
+# Ejemplo de utilización
+
+### Reporte diario (8:00 AM) y `/alive@geocomrf_bot`
 
 <img width="467" height="555" alt="image" src="https://github.com/user-attachments/assets/98729b72-50ca-4de6-899f-0649a009d97f" />
+
+### Deteccion OFFLINE (con reporte de espectrograma 30 segundos despues)
+
+<img width="501" height="407" alt="Screenshot From 2026-07-27 18-27-00" src="https://github.com/user-attachments/assets/a30c3a80-81c6-461d-862c-8c99726cb105" />
